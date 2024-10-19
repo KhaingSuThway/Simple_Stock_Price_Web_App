@@ -1,7 +1,7 @@
-# Interactive Stock Price Analyzer
+# Interactive Stock Price Visualizer
 
 ## Overview
-This repository showcases a powerful yet user-friendly stock price analysis application built using Streamlit. The app demonstrates proficiency in Python programming, data visualization, and financial data handling, making it an excellent portfolio piece for data analysts, financial technology developers, or software engineers interested in fintech.
+This repository showcases a simple yet user-friendly stock price analysis application built using Streamlit. The app demonstrates proficiency in Python programming, data visualization, and financial data handling, making it an excellent portfolio piece for data analysts, financial technology developers, or software engineers interested in fintech.
 
 ## Key Features
 - **Single Stock Analysis**: Visualize closing prices and trading volumes for major tech stocks.
