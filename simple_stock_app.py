@@ -69,7 +69,7 @@ def perform_stock_analysis(tickerDf):
 
 st.write("""
          # SimpleStock Price App
-         Shown are the stock **closing price** and **volume** of Google!
+         Shown are the stocks of Google, Apple, Microsoft, and GameStop! You can select the data you want to see whether it is the opening price, closing price, high price, low price, or volume, whether you want to view a single stock or compare multiple stocks!
          """)
 
 st.write("""
