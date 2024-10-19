@@ -1,6 +1,8 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
+import numpy as np
+from scipy import stats
 
 st.write("""
          # SimpleStock Price App
@@ -61,6 +63,8 @@ if view_option == "Single":
             """)
         st.line_chart(tickerDf.Volume)
 
+    perform_stock_analysis(tickerDf)
+
 if view_option == "Compare":
     st.write("How would you like to compare the stocks?")
     
@@ -92,5 +96,55 @@ if view_option == "Compare":
         if compare_option:
             chart_data = {stock: data[stock][compare_option] for stock in selected_stocks}
             st.line_chart(chart_data)
+
+            # Perform analysis for each selected stock
+            for stock in selected_stocks:
+                st.write(f"### Analysis for {stock}")
+                perform_stock_analysis(pd.DataFrame(data[stock]))
     else:
         st.write("Please select at least one stock to compare.")
+
+def calculate_returns(data):
+    """Calculate daily and annualized returns."""
+    daily_returns = data['Close'].pct_change()
+    annualized_return = ((1 + daily_returns.mean()) ** 252) - 1
+    return daily_returns, annualized_return
+
+def calculate_volatility(daily_returns):
+    """Calculate annualized volatility."""
+    return daily_returns.std() * np.sqrt(252)
+
+def calculate_sharpe_ratio(returns, risk_free_rate=0.02):
+    """Calculate Sharpe Ratio."""
+    return (returns - risk_free_rate) / calculate_volatility(returns)
+
+def perform_stock_analysis(tickerDf):
+    st.write("### Stock Analysis")
+
+    # Calculate returns
+    daily_returns, annualized_return = calculate_returns(tickerDf)
+    
+    # Calculate volatility
+    volatility = calculate_volatility(daily_returns)
+    
+    # Calculate Sharpe Ratio
+    sharpe_ratio = calculate_sharpe_ratio(annualized_return)
+    
+    # Calculate beta
+    market_ticker = yf.Ticker('^GSPC')  # S&P 500 as market proxy
+    market_data = market_ticker.history(period='1d', start='2010-5-31', end='2024-5-31')
+    market_returns = market_data['Close'].pct_change()
+    beta, alpha, r_value, p_value, std_err = stats.linregress(market_returns[1:], daily_returns[1:])
+
+    # Display results
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric("Annualized Return", f"{annualized_return:.2%}")
+        st.metric("Annualized Volatility", f"{volatility:.2%}")
+    with col2:
+        st.metric("Sharpe Ratio", f"{sharpe_ratio:.2f}")
+        st.metric("Beta", f"{beta:.2f}")
+
+    # Plot returns distribution
+    st.write("### Returns Distribution")
+    st.line_chart(daily_returns)
