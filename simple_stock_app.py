@@ -4,6 +4,69 @@ import pandas as pd
 import numpy as np
 from scipy import stats
 
+def calculate_returns(data):
+    """Calculate daily and annualized returns."""
+    daily_returns = data['Close'].pct_change()
+    annualized_return = ((1 + daily_returns.mean()) ** 252) - 1
+    return daily_returns, annualized_return
+
+def calculate_volatility(daily_returns):
+    """Calculate annualized volatility."""
+    return daily_returns.std() * np.sqrt(252)
+
+def calculate_sharpe_ratio(returns, risk_free_rate=0.02):
+    """Calculate Sharpe Ratio."""
+    return (returns - risk_free_rate) / calculate_volatility(returns)
+
+def perform_stock_analysis(tickerDf):
+    st.write("### Stock Analysis")
+
+    # Calculate returns
+    daily_returns, annualized_return = calculate_returns(tickerDf)
+    
+    # Calculate volatility
+    volatility = calculate_volatility(daily_returns)
+    
+    # Calculate Sharpe Ratio
+    sharpe_ratio = calculate_sharpe_ratio(annualized_return)
+    
+    # Calculate beta
+    market_ticker = yf.Ticker('^GSPC')  # S&P 500 as market proxy
+    market_data = market_ticker.history(period='1d', start='2010-5-31', end='2024-5-31')
+    market_returns = market_data['Close'].pct_change()
+    beta, alpha, r_value, p_value, std_err = stats.linregress(market_returns[1:], daily_returns[1:])
+
+    # Display results
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric("Annualized Return", f"{annualized_return:.2%}")
+        st.metric("Annualized Volatility", f"{volatility:.2%}")
+    with col2:
+        st.metric("Sharpe Ratio", f"{sharpe_ratio:.2f}")
+        st.metric("Beta", f"{beta:.2f}")
+
+    # Add explanations
+    with st.expander("Understand these metrics"):
+        st.write("""
+        ### Annualized Return
+        Represents the average yearly return of the stock over the analyzed period, assuming returns are compounded. A positive value indicates the stock has gained value over time.
+
+        ### Annualized Volatility
+        Measures the degree of variation in the stock's returns over a year. Higher volatility indicates greater risk and potential for both gains and losses.
+
+        ### Sharpe Ratio
+        A measure of risk-adjusted return, calculated as (return - risk-free rate) / volatility. A higher Sharpe Ratio indicates better risk-adjusted performance. Typically, ratios above 1 are considered good, above 2 very good, and above 3 excellent.
+
+        ### Beta
+        Measures the stock's volatility in relation to the overall market (usually compared to a benchmark like the S&P 500). A beta of 1.0 indicates the stock moves in line with the market. Beta > 1 suggests the stock is more volatile than the market, while Beta < 1 indicates lower volatility compared to the market.
+        """)
+
+    # Plot returns distribution
+    st.write("### Returns Distribution")
+    st.line_chart(daily_returns)
+
+    
+
 st.write("""
          # SimpleStock Price App
          Shown are the stock **closing price** and **volume** of Google!
@@ -96,55 +159,6 @@ if view_option == "Compare":
         if compare_option:
             chart_data = {stock: data[stock][compare_option] for stock in selected_stocks}
             st.line_chart(chart_data)
-
-            # Perform analysis for each selected stock
-            for stock in selected_stocks:
-                st.write(f"### Analysis for {stock}")
-                perform_stock_analysis(pd.DataFrame(data[stock]))
+ 
     else:
         st.write("Please select at least one stock to compare.")
-
-def calculate_returns(data):
-    """Calculate daily and annualized returns."""
-    daily_returns = data['Close'].pct_change()
-    annualized_return = ((1 + daily_returns.mean()) ** 252) - 1
-    return daily_returns, annualized_return
-
-def calculate_volatility(daily_returns):
-    """Calculate annualized volatility."""
-    return daily_returns.std() * np.sqrt(252)
-
-def calculate_sharpe_ratio(returns, risk_free_rate=0.02):
-    """Calculate Sharpe Ratio."""
-    return (returns - risk_free_rate) / calculate_volatility(returns)
-
-def perform_stock_analysis(tickerDf):
-    st.write("### Stock Analysis")
-
-    # Calculate returns
-    daily_returns, annualized_return = calculate_returns(tickerDf)
-    
-    # Calculate volatility
-    volatility = calculate_volatility(daily_returns)
-    
-    # Calculate Sharpe Ratio
-    sharpe_ratio = calculate_sharpe_ratio(annualized_return)
-    
-    # Calculate beta
-    market_ticker = yf.Ticker('^GSPC')  # S&P 500 as market proxy
-    market_data = market_ticker.history(period='1d', start='2010-5-31', end='2024-5-31')
-    market_returns = market_data['Close'].pct_change()
-    beta, alpha, r_value, p_value, std_err = stats.linregress(market_returns[1:], daily_returns[1:])
-
-    # Display results
-    col1, col2 = st.columns(2)
-    with col1:
-        st.metric("Annualized Return", f"{annualized_return:.2%}")
-        st.metric("Annualized Volatility", f"{volatility:.2%}")
-    with col2:
-        st.metric("Sharpe Ratio", f"{sharpe_ratio:.2f}")
-        st.metric("Beta", f"{beta:.2f}")
-
-    # Plot returns distribution
-    st.write("### Returns Distribution")
-    st.line_chart(daily_returns)
