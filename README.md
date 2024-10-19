@@ -18,7 +18,7 @@ This repository showcases a simple yet user-friendly stock price analysis applic
 - **Data Visualization**: Implemented using Streamlit's built-in charting capabilities
 
 ## Live Demo
-Experience the app in action: [Stock Price Analyzer](https://kstsimplestockpriceportfolio.streamlit.app/)
+Experience the app in action: [Simple Stock Price Visualizer](https://kstsimplestockpriceportfolio.streamlit.app/)
 
 ## Skills Demonstrated
 - Data fetching and processing
