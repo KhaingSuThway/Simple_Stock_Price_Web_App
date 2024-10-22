@@ -4,8 +4,8 @@ import pandas as pd
 import numpy as np
 from scipy import stats
 from statsmodels.tsa.arima.model import ARIMA
-from pmdarima import auto_arima
 import matplotlib.pyplot as plt
+from datetime import datetime, timedelta, date
 
 def calculate_returns(data):
     """Calculate daily and annualized returns."""
@@ -25,32 +25,54 @@ def perform_arima_forecast(data, periods=30):
     """
     Perform ARIMA forecast on the given time series data.
     """
-    # Automatically find the best ARIMA parameters
-    model = auto_arima(data, start_p=1, start_q=1, max_p=3, max_q=3, m=1,
-                       start_P=0, seasonal=False, d=1, D=1, trace=True,
-                       error_action='ignore', suppress_warnings=True, stepwise=True)
-
-    # Fit the ARIMA model
-    arima_model = ARIMA(data, order=model.order)
-    results = arima_model.fit()
+    # Try different ARIMA orders
+    orders = [(1,1,1), (1,1,2), (2,1,2), (1,2,1)]
+    best_aic = np.inf
+    best_model = None
+    
+    for order in orders:
+        try:
+            model = ARIMA(data, order=order)
+            results = model.fit()
+            if results.aic < best_aic:
+                best_aic = results.aic
+                best_model = results
+        except:
+            continue
+    
+    if best_model is None:
+        st.error("Unable to fit a suitable ARIMA model. Please try a different stock or time range.")
+        return None, None
 
     # Make forecast
-    forecast = results.forecast(steps=periods)
+    forecast = best_model.forecast(steps=periods)
     
-    return forecast, results
+    return forecast, best_model
 
-def plot_forecast(data, forecast):
+def plot_forecast(data, forecast, periods):
     """
     Plot the original data and the forecast.
     """
+    if forecast is None:
+        return None
+    
+    start_date = data.index[-1] - timedelta(days=periods)
+    plot_data = data.loc[start_date:]
+    
     fig, ax = plt.subplots(figsize=(10, 6))
-    ax.plot(data.index, data, label='Observed')
+    ax.plot(plot_data.index, plot_data, label='Observed Closing Price')
     ax.plot(pd.date_range(start=data.index[-1], periods=len(forecast)+1, freq='D')[1:],
             forecast, color='red', label='Forecast')
-    ax.set_title('ARIMA Forecast')
+    ax.fill_between(pd.date_range(start=data.index[-1], periods=len(forecast)+1, freq='D')[1:],
+                    forecast - forecast.std() * 2,
+                    forecast + forecast.std() * 2,
+                    color='pink', alpha=0.3, label='95% Confidence Interval')
+    ax.set_title(f'ARIMA Forecast (Last {periods} days + {periods} days forecast)')
     ax.set_xlabel('Date')
-    ax.set_ylabel('Stock Price')
+    ax.set_ylabel('Stock Price (Closing)')
     ax.legend()
+    fig.autofmt_xdate()
+    
     return fig
 
 def perform_stock_analysis(tickerDf):
@@ -66,8 +88,8 @@ def perform_stock_analysis(tickerDf):
     sharpe_ratio = calculate_sharpe_ratio(annualized_return)
     
     # Calculate beta
-    market_ticker = yf.Ticker('^GSPC')  # S&P 500 as market proxy
-    market_data = market_ticker.history(period='1d', start='2010-5-31', end='2024-5-31')
+    market_ticker = '^GSPC'  # S&P 500 as market proxy
+    market_data = get_stock_data(market_ticker, tickerDf.index[0].strftime('%Y-%m-%d'))
     market_returns = market_data['Close'].pct_change()
     beta, alpha, r_value, p_value, std_err = stats.linregress(market_returns[1:], daily_returns[1:])
 
@@ -107,30 +129,49 @@ def perform_stock_analysis(tickerDf):
     with st.spinner('Calculating ARIMA forecast...'):
         forecast, results = perform_arima_forecast(tickerDf['Close'], periods=forecast_periods)
         
-    st.pyplot(plot_forecast(tickerDf['Close'], forecast))
+    if forecast is not None:
+        fig = plot_forecast(tickerDf['Close'], forecast, forecast_periods)
+        if fig:
+            st.pyplot(fig)
+        
+        st.write(f"Forecast for next {forecast_periods} days:")
+        st.write(forecast)
+        
+        with st.expander("Understand ARIMA Forecast"):
+            st.write("""
+            ### ARIMA (AutoRegressive Integrated Moving Average) Forecast
+
+            This forecast is based on the stock's closing prices. The ARIMA model attempts to capture patterns in the historical data to make predictions.
+
+            Key points about this forecast:
+            
+            - The blue line shows the actual closing prices for the past {forecast_periods} days.
+            - The red line shows the predicted closing prices for the next {forecast_periods} days.
+            - The pink shaded area represents the 95% confidence interval for the forecast.
+            - The model automatically selects the best ARIMA parameters from a predefined set.
+            - If the forecast appears as a straight line, it suggests the model expects little change or is struggling to capture the stock's behavior.
+            - Remember that stock prices are influenced by many external factors that cannot be predicted by past data alone.
+            - Always use forecasts as one of many tools in your investment decision-making process, not as guaranteed predictions.
+            """.format(forecast_periods=forecast_periods))
+
+        # Display model summary
+        with st.expander("ARIMA Model Summary"):
+            st.text(results.summary())
+    else:
+        st.error("Unable to generate forecast. Please try a different stock or time range.")
+
+def get_stock_data(ticker, start_date, end_date=None):
+    """
+    Fetch stock data from start_date to end_date (or today if not specified).
+    """
+    if end_date is None:
+        end_date = datetime.today().strftime('%Y-%m-%d')
     
-    with st.expander("Understand ARIMA Forecast"):
-        st.write("""
-        ### ARIMA (AutoRegressive Integrated Moving Average) Forecast
+    stock_data = yf.Ticker(ticker)
+    df = stock_data.history(start=start_date, end=end_date)
+    return df
 
-        The ARIMA model is a popular and flexible forecasting method for time series data. It combines three components:
-        
-        1. **AR (AutoRegressive)**: Uses the dependent relationship between an observation and some number of lagged observations.
-        2. **I (Integrated)**: Differencing of raw observations to make the time series stationary.
-        3. **MA (Moving Average)**: Uses the dependency between an observation and a residual error from a moving average model applied to lagged observations.
-
-        Key points about this forecast:
-        
-        - The model automatically selects the best parameters for your data.
-        - The red line shows the predicted future stock prices.
-        - This forecast assumes that past patterns in the stock price will continue in the future.
-        - While useful, remember that stock prices are influenced by many external factors that cannot be predicted by past data alone.
-        - Always use forecasts as one of many tools in your investment decision-making process.
-        """)
-
-    # Display model summary
-    with st.expander("ARIMA Model Summary"):
-        st.text(results.summary())
+today = date.today().strftime('%Y-%m-%d')
 
 st.write("""
          # SimpleStock Price App
@@ -149,11 +190,11 @@ st.write("""
 view_option = st.selectbox("View Options:",("Single","Compare"),)
 if view_option == "Single":
     option_stock = st.selectbox(
-        "Which compaany stock would you like to check?",("GOOGL","AAPL","MSFT","GME"),)
+        "Which company stock would you like to check?",("GOOGL","AAPL","MSFT","GME"),)
 
     tickerSymbol = option_stock
     tickerData = yf.Ticker(tickerSymbol)
-    tickerDf = tickerData.history(period='1d', start='2010-5-31', end='2024-5-31')
+    tickerDf = tickerData.history(period='1d', start='2010-5-31', end=today)
     
     opening_price = st.checkbox("Opening Price")
     high_price = st.checkbox("High Price")
@@ -211,7 +252,7 @@ if view_option == "Compare":
         data = {}
         for stock in selected_stocks:
             ticker = yf.Ticker(stocks[stock])
-            history = ticker.history(period='1d', start='2010-5-31', end='2024-5-31')
+            history = ticker.history(period='1d', start='2010-5-31', end=today)
             data[stock] = {
                 "Opening Price": history.Open,
                 "Closing Price": history.Close,
