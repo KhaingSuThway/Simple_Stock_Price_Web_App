@@ -3,6 +3,9 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 from scipy import stats
+from statsmodels.tsa.arima.model import ARIMA
+from pmdarima import auto_arima
+import matplotlib.pyplot as plt
 
 def calculate_returns(data):
     """Calculate daily and annualized returns."""
@@ -17,6 +20,38 @@ def calculate_volatility(daily_returns):
 def calculate_sharpe_ratio(returns, risk_free_rate=0.02):
     """Calculate Sharpe Ratio."""
     return (returns - risk_free_rate) / calculate_volatility(returns)
+
+def perform_arima_forecast(data, periods=30):
+    """
+    Perform ARIMA forecast on the given time series data.
+    """
+    # Automatically find the best ARIMA parameters
+    model = auto_arima(data, start_p=1, start_q=1, max_p=3, max_q=3, m=1,
+                       start_P=0, seasonal=False, d=1, D=1, trace=True,
+                       error_action='ignore', suppress_warnings=True, stepwise=True)
+
+    # Fit the ARIMA model
+    arima_model = ARIMA(data, order=model.order)
+    results = arima_model.fit()
+
+    # Make forecast
+    forecast = results.forecast(steps=periods)
+    
+    return forecast, results
+
+def plot_forecast(data, forecast):
+    """
+    Plot the original data and the forecast.
+    """
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.plot(data.index, data, label='Observed')
+    ax.plot(pd.date_range(start=data.index[-1], periods=len(forecast)+1, freq='D')[1:],
+            forecast, color='red', label='Forecast')
+    ax.set_title('ARIMA Forecast')
+    ax.set_xlabel('Date')
+    ax.set_ylabel('Stock Price')
+    ax.legend()
+    return fig
 
 def perform_stock_analysis(tickerDf):
     st.write("### Stock Analysis")
@@ -65,7 +100,37 @@ def perform_stock_analysis(tickerDf):
     st.write("### Returns Distribution")
     st.line_chart(daily_returns)
 
+    # ARIMA Forecast
+    st.write("### ARIMA Forecast")
+    forecast_periods = st.slider("Forecast Periods", min_value=7, max_value=90, value=30)
     
+    with st.spinner('Calculating ARIMA forecast...'):
+        forecast, results = perform_arima_forecast(tickerDf['Close'], periods=forecast_periods)
+        
+    st.pyplot(plot_forecast(tickerDf['Close'], forecast))
+    
+    with st.expander("Understand ARIMA Forecast"):
+        st.write("""
+        ### ARIMA (AutoRegressive Integrated Moving Average) Forecast
+
+        The ARIMA model is a popular and flexible forecasting method for time series data. It combines three components:
+        
+        1. **AR (AutoRegressive)**: Uses the dependent relationship between an observation and some number of lagged observations.
+        2. **I (Integrated)**: Differencing of raw observations to make the time series stationary.
+        3. **MA (Moving Average)**: Uses the dependency between an observation and a residual error from a moving average model applied to lagged observations.
+
+        Key points about this forecast:
+        
+        - The model automatically selects the best parameters for your data.
+        - The red line shows the predicted future stock prices.
+        - This forecast assumes that past patterns in the stock price will continue in the future.
+        - While useful, remember that stock prices are influenced by many external factors that cannot be predicted by past data alone.
+        - Always use forecasts as one of many tools in your investment decision-making process.
+        """)
+
+    # Display model summary
+    with st.expander("ARIMA Model Summary"):
+        st.text(results.summary())
 
 st.write("""
          # SimpleStock Price App
